@@ -85,28 +85,75 @@ projetos/1-classificacao-mnist/
 
 ## 📝 Relatório do Candidato
 
-👤 **Nome Completo:**
+👤 **Nome Completo:** Davi Neemias Cruz de Oliveira
 
 ### 1️⃣ Resumo da Arquitetura do Modelo
 
-Descreva, em palavras, a arquitetura da CNN implementada em `train_model.py` (número de blocos convolucionais, uso de batch normalization/dropout, estratégia de validação/early stopping).
+A CNN implementada em `train_model.py` utiliza a arquitetura **Sequential** com **3 blocos convolucionais**, cada um composto por `Conv2D` + `BatchNormalization` + `MaxPooling2D`:
+
+| Bloco | Filtros | Kernel | Função de Ativação |
+| 1 | 32 | 3x3 | ReLU |
+| 2 | 64 | 3x3 | ReLU |
+| 3 | 128 | 3x3 | ReLU |
+
+Após os blocos convolucionais, a rede possui:
+- Camada `Flatten` para vetorizar as features (saída: 1.152 features)
+- `Dropout(0.5)` para regularização após o flatten
+- Camada densa `Dense(128, activation='relu')`
+- `Dropout(0.3)` para regularização adicional
+- Camada de saída `Dense(10, activation='softmax')` para classificação nas 10 classes
+
+**Total de parâmetros:** 242.442 (241.994 treináveis).
+
+**Estratégia de validação:** Split manual 90%/10% (54.000 treino / 6.000 validação).
+
+**Early Stopping:** monitorando `val_loss` com `patience=3`, restaurando os pesos da melhor epoch (epoch 6).
 
 ### 2️⃣ Bibliotecas Utilizadas
 
-Liste as principais bibliotecas utilizadas, preferencialmente com suas versões.
+ Python  3.9.23 
+ TensorFlow  2.20.0 
+ Keras  3.10.0 
+ NumPy  2.0.2 
 
 ### 3️⃣ Técnica de Otimização do Modelo
 
-Explique qual técnica foi utilizada para otimizar o modelo em `optimize_model.py`.
+Foi utilizada a **Dynamic Range Quantization**, implementada via `tf.lite.Optimize.DEFAULT`. Esta técnica converte os pesos do modelo de ponto flutuante (float32) para inteiros de 8 bits (int8), reduzindo significativamente o tamanho do arquivo e acelerando a inferência em dispositivos Edge, com perda mínima de acurácia.
+
+A conversão foi realizada com:
+```python
+converter = tf.lite.TFLiteConverter.from_keras_model(model)
+converter.optimizations = [tf.lite.Optimize.DEFAULT]
+tflite_model = converter.convert()
+```
 
 ### 4️⃣ Resultados Obtidos
 
-Informe a acurácia de validação obtida e o tamanho dos arquivos `model.h5` e `model.tflite`.
+ Métrica - Valor 
+ **Acurácia de validação** -- **99.33%** 
+ Tamanho model.h5 (original) -- 2.910,3 KB (2,84 MB) 
+ Tamanho model.tflite (otimizado) -- 249,0 KB (0,24 MB) 
+ **Redução de tamanho** -- **91,4%** 
 
-### 5️⃣ Comentários Adicionais (Opcional)
+### 5️⃣ Comentários Adicionais
 
-Dificuldades encontradas, decisões técnicas importantes, limitações do modelo, aprendizados durante o desafio.
+- **Hiperparâmetro escolhido:** `patience=3` no EarlyStopping. Justificativa: um valor menor (1-2) poderia interromper o treinamento antes do modelo convergir adequadamente, enquanto um valor maior (5+) aumentaria tempo de treino sem ganho significativo. O valor 3 equilibra eficiência e qualidade.
+- O treinamento parou na epoch 9 e restaurou os pesos da epoch 6, demonstrando que o modelo atingiu seu melhor desempenho cedo e o EarlyStopping evitou overfitting.
+- A Dynamic Range Quantization reduziu o modelo em 91,4%, tornando-o viável para execução em dispositivos com recursos limitados.
+- O dataset MNIST é relativamente simples, permitindo alta acurácia com uma CNN de 3 blocos. Para datasets mais complexos, arquiteturas maiores ou data augmentation seriam necessários.
 
 ### 6️⃣ Exemplo de Inferência
 
-Cole a saída do terminal ao rodar `run_inference.py` (predito vs. real para as 5+ amostras), e comente brevemente se houve algum caso interessante (acerto ou erro) entre as amostras testadas.
+Saída do terminal ao executar `python3.9 run_inference.py`:
+
+```
+Rodando inferencia em 5 amostras usando model.tflite:
+
+Amostra 1: predito=7 | real=7
+Amostra 2: predito=2 | real=2
+Amostra 3: predito=1 | real=1
+Amostra 4: predito=0 | real=0
+Amostra 5: predito=4 | real=4
+```
+
+**Análise:** As 5 amostras selecionadas automaticamente (primeiras imagens do conjunto de teste) foram todas classificadas corretamente, com predições idênticas aos rótulos reais. Isso é consistente com a acurácia de 99,33% obtida na validação — o modelo demonstra forte capacidade de generalização mesmo após a redução agressiva de 91,4% no tamanho via quantização.
